@@ -50,21 +50,7 @@ function Login({ onLogin, showToast }) {
       </div>
 
       <form onSubmit={handleSubmit}>
-        {errorMsg && (
-          <div style={{
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: '10px',
-            padding: '10px 12px',
-            fontSize: '12px',
-            color: '#f87171',
-            marginBottom: '16px',
-            textAlign: 'center',
-            fontWeight: '500'
-          }}>
-            {errorMsg}
-          </div>
-        )}
+        {errorMsg && <div className="form-error">{errorMsg}</div>}
 
         <div className="input-group">
           <label className="input-label">Username</label>
@@ -124,8 +110,8 @@ function Login({ onLogin, showToast }) {
           )}
         </button>
 
-        <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '11px', color: '#6b7280' }}>
-          Authorized access only. Use pre-configured backend credentials (e.g. admin / 123).
+        <div style={{ marginTop: '22px', textAlign: 'center', fontSize: '11px', color: 'var(--text-3)' }}>
+          Authorized access only. All sessions are logged.
         </div>
       </form>
     </div>

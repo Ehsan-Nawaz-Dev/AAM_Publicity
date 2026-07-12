@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Phone, MapPin, Calendar, CreditCard, ShieldCheck, Lock, Upload, LogOut, Check } from 'lucide-react';
+import { Phone, MapPin, Calendar, ShieldCheck, Lock, Upload, LogOut } from 'lucide-react';
 
 function Profile({ token, onLogout, onUserUpdate, showToast }) {
   const [profile, setProfile] = useState(null);
@@ -239,7 +239,7 @@ function Profile({ token, onLogout, onUserUpdate, showToast }) {
         
         {/* Personal Details Card */}
         <div className="card" style={{ padding: '30px' }}>
-          <div className="section-title" style={{ marginBottom: '24px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px' }}>
+          <div className="section-title" style={{ marginBottom: '24px', borderBottom: '1px solid var(--line)', paddingBottom: '14px' }}>
             <span style={{ fontSize: '18px', fontWeight: '800' }}>Personal Details</span>
             <span 
               className="section-link" 
@@ -323,7 +323,7 @@ function Profile({ token, onLogout, onUserUpdate, showToast }) {
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
                     disabled={saving}
-                    style={{ background: 'rgba(25, 27, 44, 0.9)', height: '42px', border: '1px solid var(--card-border)' }}
+                    style={{ height: '42px' }}
                   >
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -382,38 +382,40 @@ function Profile({ token, onLogout, onUserUpdate, showToast }) {
               </button>
             </form>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', borderRadius: '14px' }}>
-                <ShieldCheck size={20} style={{ color: 'var(--primary)', flexShrink: 0 }} />
-                <div>
-                  <span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', textTransform: 'uppercase', fontWeight: '600' }}>CNIC Card</span>
-                  <strong style={{ fontSize: '14px' }}>{profile?.cnic || 'Not Specified'}</strong>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+
+              <div className="info-row">
+                <ShieldCheck size={19} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <span className="form-label" style={{ marginBottom: 2 }}>CNIC</span>
+                  <strong style={{ fontSize: '13.5px' }}>{profile?.cnic || 'Not specified'}</strong>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', borderRadius: '14px' }}>
-                <Phone size={20} style={{ color: 'var(--primary)', flexShrink: 0 }} />
-                <div>
-                  <span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', textTransform: 'uppercase', fontWeight: '600' }}>Mobile Phone</span>
-                  <strong style={{ fontSize: '14px' }}>{profile?.phone || 'Not Specified'}</strong>
+              <div className="info-row">
+                <Phone size={19} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <span className="form-label" style={{ marginBottom: 2 }}>Mobile phone</span>
+                  <strong style={{ fontSize: '13.5px' }}>{profile?.phone || 'Not specified'}</strong>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', borderRadius: '14px' }}>
-                <Calendar size={20} style={{ color: 'var(--primary)', flexShrink: 0 }} />
-                <div>
-                  <span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', textTransform: 'uppercase', fontWeight: '600' }}>Birth Date / Gender</span>
-                  <strong style={{ fontSize: '14px' }}>{profile?.birthDate || 'N/A'} • {profile?.gender || 'Male'}</strong>
+              <div className="info-row">
+                <Calendar size={19} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <span className="form-label" style={{ marginBottom: 2 }}>Birth date / gender</span>
+                  <strong style={{ fontSize: '13.5px' }}>
+                    {profile?.birthDate || 'Not specified'}{profile?.gender ? ` • ${profile.gender}` : ''}
+                  </strong>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', borderRadius: '14px', gridColumn: '1 / -1' }}>
-                <MapPin size={20} style={{ color: 'var(--primary)', flexShrink: 0 }} />
-                <div>
-                  <span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', textTransform: 'uppercase', fontWeight: '600' }}>Address Location</span>
-                  <strong style={{ fontSize: '14px' }}>
-                    {profile?.address ? `${profile.address}, ` : ''}{profile?.city || 'No City'}{profile?.state ? `, ${profile.state}` : ''}
+              <div className="info-row" style={{ gridColumn: '1 / -1' }}>
+                <MapPin size={19} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <span className="form-label" style={{ marginBottom: 2 }}>Address</span>
+                  <strong style={{ fontSize: '13.5px' }}>
+                    {[profile?.address, profile?.city, profile?.state].filter(Boolean).join(', ') || 'Not specified'}
                   </strong>
                 </div>
               </div>

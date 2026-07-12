@@ -74,7 +74,7 @@ function App() {
     return (
       <div className="loading-container">
         <div className="spinner"></div>
-        <p style={{ color: '#9ca3af', fontSize: '14px', marginTop: '16px', fontFamily: 'Outfit' }}>Loading session...</p>
+        <p className="muted">Restoring session…</p>
       </div>
     );
   }
@@ -115,20 +115,22 @@ function App() {
     {
       id: 'dashboard',
       label: 'Dashboard',
+      caption: 'Field operations at a glance',
       icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="7" height="9" />
-          <rect x="14" y="3" width="7" height="5" />
-          <rect x="14" y="12" width="7" height="9" />
-          <rect x="3" y="16" width="7" height="5" />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="7" height="9" rx="1.5" />
+          <rect x="14" y="3" width="7" height="5" rx="1.5" />
+          <rect x="14" y="12" width="7" height="9" rx="1.5" />
+          <rect x="3" y="16" width="7" height="5" rx="1.5" />
         </svg>
       )
     },
     {
       id: 'samplings',
       label: 'Mechanics',
+      caption: 'Complete registry of every recorded mechanic',
       icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
           <circle cx="9" cy="7" r="4" />
           <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
@@ -139,14 +141,17 @@ function App() {
     {
       id: 'profile',
       label: 'Admin Profile',
+      caption: 'Your account and security settings',
       icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
           <circle cx="12" cy="7" r="4" />
         </svg>
       )
     }
   ];
+
+  const activeTabMeta = tabs.find((t) => t.id === activeTab);
 
   return (
     <div className="web-layout">
@@ -161,15 +166,20 @@ function App() {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <div className="sidebar-logo">A</div>
-          <span className="sidebar-title">AAM POWER</span>
+          <div>
+            <span className="sidebar-title">AAM POWER</span>
+            <span className="sidebar-subtitle">Field Portal</span>
+          </div>
         </div>
-        
+
         <nav className="sidebar-nav">
+          <div className="sidebar-section-label">Menu</div>
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`sidebar-link ${activeTab === tab.id ? 'active' : ''}`}
+              title={tab.label}
             >
               {tab.icon}
               <span>{tab.label}</span>
@@ -178,8 +188,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <button className="sidebar-link" onClick={handleLogout} style={{ width: '100%', color: '#ef4444', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '14px' }}>
+          <button className="sidebar-link danger" onClick={handleLogout} title="Sign out">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
@@ -194,7 +204,8 @@ function App() {
         {/* Top Header */}
         <header className="top-header">
           <div className="page-title-area">
-            <h1>{tabs.find(t => t.id === activeTab)?.label || 'AAM POWER'}</h1>
+            <h1>{activeTabMeta?.label || 'AAM POWER'}</h1>
+            <p>{activeTabMeta?.caption}</p>
           </div>
           <div className="top-header-actions">
             <div className="user-profile-badge">
@@ -206,8 +217,8 @@ function App() {
                   onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80' }}
                 />
               ) : (
-                <div className="user-avatar-mini" style={{ background: '#00d2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', color: 'white' }}>
-                  {user.name ? user.name[0] : 'A'}
+                <div className="user-avatar-mini" style={{ background: 'var(--grad-primary)', display: 'grid', placeItems: 'center', fontSize: '12px', fontWeight: 700, color: '#04121a' }}>
+                  {user.name ? user.name[0].toUpperCase() : 'A'}
                 </div>
               )}
               <span className="user-name-mini">{user.name || 'Admin'}</span>

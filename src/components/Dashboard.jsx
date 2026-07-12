@@ -1,46 +1,84 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Award, MapPin, ArrowRight, MessageSquare, Clock, ShieldCheck, Compass } from 'lucide-react';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
+import {
+  Users, MapPin, ArrowRight, MessageSquare, Clock, ShieldCheck, Compass,
+  Image as ImageIcon, ExternalLink, Building2
+} from 'lucide-react';
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend
+} from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
 
-// Register Chart.js components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  ArcElement,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
+
+const INK = '#a3abbd';
+const INK_MUTED = '#6b7488';
+const BRAND = '#22d3ee';
+const TRACK = 'rgba(255, 255, 255, 0.06)';
+const SURFACE = '#111524';
+
+const TOOLTIP = {
+  backgroundColor: '#0c0f1a',
+  titleColor: '#f2f4f8',
+  bodyColor: '#a3abbd',
+  borderColor: 'rgba(255,255,255,0.12)',
+  borderWidth: 1,
+  padding: 10,
+  cornerRadius: 8,
+  displayColors: false,
+  titleFont: { family: 'Outfit', size: 12, weight: '700' },
+  bodyFont: { family: 'Inter', size: 12 }
+};
+
+const visitDateOf = (item) =>
+  item.visitDate || item.date || (item.createdAt ? item.createdAt.slice(0, 10) : '');
+
+const formatDate = (v) => {
+  if (!v) return '';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return v;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+// Some stored photo URLs are dead; fall back to an icon rather than a blank box.
+function VisitThumb({ item }) {
+  const [broken, setBroken] = useState(false);
+  const src = item.images?.[0];
+
+  if (!src || broken) return <Building2 size={17} />;
+
+  return (
+    <img
+      src={src}
+      alt=""
+      style={{ width: '100%', height: '100%', borderRadius: 10, objectFit: 'cover' }}
+      onError={() => setBroken(true)}
+    />
+  );
+}
 
 function Dashboard({ token, onNavigate, showToast }) {
-  const [stats, setStats] = useState({ areaVisited: 0, samplesDistributed: 0, reviewReceived: 0 });
+  const [stats, setStats] = useState({ areaVisited: 0, samplesDistributed: 0, reviewReceived: 0, withPhotos: 0 });
   const [recent, setRecent] = useState({ areas: [], distributions: [], reviews: [] });
+  const [cities, setCities] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const load = async () => {
       try {
         setLoading(true);
-        const headers = { 'Authorization': `Bearer ${token}` };
-        
-        const [statsRes, recentRes] = await Promise.all([
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const [statsRes, recentRes, citiesRes] = await Promise.all([
           fetch('/api/sampling-stats', { headers }),
-          fetch('/api/sampling-recent', { headers })
+          fetch('/api/sampling-recent', { headers }),
+          fetch('/api/mechanics/cities', { headers })
         ]);
 
-        if (!statsRes.ok || !recentRes.ok) {
-          throw new Error('Failed to load dashboard data');
-        }
+        if (!statsRes.ok || !recentRes.ok) throw new Error('Failed to load dashboard data');
 
-        const statsData = await statsRes.json();
-        const recentData = await recentRes.json();
-
-        setStats(statsData);
-        setRecent(recentData);
+        setStats(await statsRes.json());
+        setRecent(await recentRes.json());
+        setCities(citiesRes.ok ? await citiesRes.json() : []);
       } catch (err) {
         console.error(err);
         showToast('Error loading dashboard data', 'error');
@@ -48,219 +86,193 @@ function Dashboard({ token, onNavigate, showToast }) {
         setLoading(false);
       }
     };
-
-    fetchData();
+    load();
   }, [token]);
 
   if (loading) {
     return (
       <div className="loading-container">
-        <div className="spinner"></div>
-        <p style={{ color: '#9ca3af', fontSize: '14px', marginTop: '16px' }}>Updating dashboard...</p>
+        <div className="spinner" />
+        <p className="muted">Loading dashboard…</p>
       </div>
     );
   }
 
-  // Calculate Doughnut Chart Data (Reviews Breakdown)
-  const notReviewed = Math.max(0, stats.samplesDistributed - stats.reviewReceived);
-  const doughnutData = {
-    labels: ['Reviewed', 'Pending Review'],
-    datasets: [
-      {
-        data: [stats.reviewReceived, notReviewed],
-        backgroundColor: ['#00d2ff', 'rgba(255, 255, 255, 0.04)'],
-        borderColor: ['#0d0f17', '#0d0f17'],
-        borderWidth: 2,
-      },
-    ],
+  const { samplesDistributed, reviewReceived, areaVisited, withPhotos = 0 } = stats;
+  const reviewedPct = samplesDistributed > 0 ? Math.round((reviewReceived / samplesDistributed) * 100) : 0;
+  const pending = Math.max(0, samplesDistributed - reviewReceived);
+
+  // Progress ring: a single ratio, so the number is the headline and the ring
+  // is its frame — not a two-category comparison.
+  const ringData = {
+    labels: ['Reviewed', 'Pending'],
+    datasets: [{
+      data: [reviewReceived, pending],
+      backgroundColor: [BRAND, TRACK],
+      borderColor: SURFACE,
+      borderWidth: 2,
+      hoverBackgroundColor: [BRAND, 'rgba(255,255,255,0.1)']
+    }]
   };
 
-  const doughnutOptions = {
+  const ringOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'bottom',
-        labels: {
-          color: '#9ca3af',
-          font: { family: 'Outfit', size: 12, weight: '500' },
-          boxWidth: 12,
-          padding: 10
-        }
-      },
-      tooltip: {
-        backgroundColor: '#121420',
-        titleFont: { family: 'Outfit', size: 12 },
-        bodyFont: { family: 'Inter', size: 12 },
-        borderColor: 'rgba(255,255,255,0.08)',
-        borderWidth: 1,
-      }
-    },
-    cutout: '75%',
-  };
-
-  // Calculate Bar Chart Data (Distributions by City)
-  const cityCounts = {};
-  recent.distributions.forEach(d => {
-    const city = d.city || 'Other';
-    cityCounts[city] = (cityCounts[city] || 0) + 1;
-  });
-
-  const barLabels = Object.keys(cityCounts);
-  const barDataValues = Object.values(cityCounts);
-
-  const barData = {
-    labels: barLabels.length > 0 ? barLabels : ['No Data'],
-    datasets: [
-      {
-        label: 'Mechanics registered',
-        data: barDataValues.length > 0 ? barDataValues : [0],
-        backgroundColor: 'rgba(0, 210, 255, 0.7)',
-        hoverBackgroundColor: '#00d2ff',
-        borderRadius: 8,
-        borderWidth: 0,
-      },
-    ],
-  };
-
-  const barOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
+    cutout: '78%',
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#121420',
-        titleFont: { family: 'Outfit', size: 12 },
-        bodyFont: { family: 'Inter', size: 12 },
-        borderColor: 'rgba(255,255,255,0.08)',
-        borderWidth: 1,
-      }
-    },
-    scales: {
-      y: {
-        grid: { color: 'rgba(255, 255, 255, 0.03)' },
-        ticks: {
-          color: '#9ca3af',
-          font: { family: 'Inter', size: 11 },
-          stepSize: 1
-        }
-      },
-      x: {
-        grid: { display: false },
-        ticks: {
-          color: '#9ca3af',
-          font: { family: 'Outfit', size: 11, weight: '500' }
+        ...TOOLTIP,
+        callbacks: {
+          label: (c) => `${c.label}: ${c.parsed.toLocaleString()} mechanics`
         }
       }
     }
   };
 
-  // Get current/last visit location (most recent element)
-  const currentVisit = recent.distributions.length > 0 ? recent.distributions[0] : null;
-  const recentVisits = recent.distributions.length > 1 ? recent.distributions.slice(1, 5) : [];
+  // Top cities across the WHOLE collection (server aggregate), not just the
+  // most recent handful of records. The long tail is summarised in the caption
+  // rather than plotted — an "Other" bar here outweighs every real city and
+  // flattens the comparison the chart exists to make.
+  const TOP_N = 10;
+  const chartCities = cities.slice(0, TOP_N);
+  const shownCount = chartCities.reduce((sum, c) => sum + c.count, 0);
+  const tailCities = Math.max(0, cities.length - TOP_N);
+
+  const cityData = {
+    labels: chartCities.map((c) => c.city),
+    datasets: [{
+      label: 'Mechanics',
+      data: chartCities.map((c) => c.count),
+      backgroundColor: BRAND,
+      hoverBackgroundColor: '#67e8f9',
+      borderRadius: 4,
+      borderSkipped: false,
+      barThickness: 14
+    }]
+  };
+
+  const cityOptions = {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: { padding: { right: 28 } },
+    plugins: {
+      legend: { display: false }, // single series — the title names it
+      tooltip: {
+        ...TOOLTIP,
+        callbacks: { label: (c) => `${c.parsed.x.toLocaleString()} mechanics` }
+      }
+    },
+    scales: {
+      x: {
+        border: { display: false },
+        grid: { color: 'rgba(255,255,255,0.04)', drawTicks: false },
+        ticks: { color: INK_MUTED, font: { family: 'Inter', size: 11 }, precision: 0 }
+      },
+      y: {
+        border: { display: false },
+        grid: { display: false },
+        ticks: {
+          color: INK,
+          font: { family: 'Noto Naskh Arabic, Inter', size: 12 },
+          crossAlign: 'far'
+        }
+      }
+    }
+  };
+
+  const currentVisit = recent.distributions[0] || null;
+  const recentVisits = recent.distributions.slice(1, 6);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      
-      {/* Metrics Row */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-icon red">
-            <Package size={24} />
-          </div>
+          <div className="stat-icon red"><Users size={22} /></div>
           <div className="stat-details">
-            <div className="stat-value">{stats.samplesDistributed}</div>
+            <div className="stat-value">{samplesDistributed.toLocaleString()}</div>
             <div className="stat-label">Total Mechanics</div>
           </div>
         </div>
-        
+
         <div className="stat-card">
-          <div className="stat-icon blue">
-            <ShieldCheck size={24} />
-          </div>
+          <div className="stat-icon blue"><ShieldCheck size={22} /></div>
           <div className="stat-details">
-            <div className="stat-value">{stats.reviewReceived}</div>
-            <div className="stat-label">Reviewed Profiles</div>
+            <div className="stat-value">{reviewReceived.toLocaleString()}</div>
+            <div className="stat-label">With Remarks</div>
           </div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon orange">
-            <MapPin size={24} />
-          </div>
+          <div className="stat-icon orange"><MapPin size={22} /></div>
           <div className="stat-details">
-            <div className="stat-value">{stats.areaVisited}</div>
-            <div className="stat-label">Active Cities</div>
+            <div className="stat-value">{areaVisited.toLocaleString()}</div>
+            <div className="stat-label">Cities Covered</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon green"><ImageIcon size={22} /></div>
+          <div className="stat-details">
+            <div className="stat-value">{withPhotos.toLocaleString()}</div>
+            <div className="stat-label">With Photos</div>
           </div>
         </div>
       </div>
 
-      {/* Main Dashboard Split Grid */}
       <div className="dashboard-sections">
-        
-        {/* Left Columns: Stats & Timelines */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {/* Charts Row */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
+
           <div className="card">
-            <h3 className="section-title" style={{ marginBottom: '20px' }}>
-              <span>Operational Analytics</span>
-            </h3>
-            
-            <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-              {/* Doughnut Chart */}
-              <div style={{ flex: '1', minWidth: '220px', height: '220px', position: 'relative' }}>
-                <Doughnut data={doughnutData} options={doughnutOptions} />
-                <div style={{
-                  position: 'absolute',
-                  top: '46%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  textAlign: 'center',
-                  pointerEvents: 'none'
-                }}>
-                  <div style={{ fontSize: '26px', fontWeight: '800', fontFamily: 'Outfit', color: '#00d2ff' }}>
-                    {stats.samplesDistributed > 0 ? Math.round((stats.reviewReceived / stats.samplesDistributed) * 100) : 0}%
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Reviewed
-                  </div>
-                </div>
-              </div>
-              
-              {/* Bar Chart */}
-              <div style={{ flex: '1.5', minWidth: '280px', height: '220px' }}>
-                <p style={{ fontSize: '12px', color: '#9ca3af', textAlign: 'center', marginBottom: '14px', fontFamily: 'Outfit', fontWeight: '600' }}>
-                  Mechanics Registry by City
-                </p>
-                <Bar data={barData} options={barOptions} />
-              </div>
+            <div className="section-title" style={{ marginBottom: 18 }}>
+              <span>Coverage by city</span>
+              <span className="section-link" onClick={() => onNavigate('samplings')}>
+                View registry <ArrowRight size={12} />
+              </span>
             </div>
+
+            {cities.length === 0 ? (
+              <p className="muted">No city data recorded yet.</p>
+            ) : (
+              <>
+                <p className="muted" style={{ marginBottom: 14 }}>
+                  Top {chartCities.length} of {cities.length} cities · {shownCount.toLocaleString()} mechanics shown
+                  {tailCities > 0 && <> · {tailCities} smaller cities not plotted</>}
+                </p>
+                <div style={{ height: Math.max(200, chartCities.length * 30) }}>
+                  <Bar data={cityData} options={cityOptions} />
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Recent Reviews/Comments */}
           <div className="card">
-            <h3 className="section-title" style={{ marginBottom: '20px' }}>
-              <span>Recent Field Reviews</span>
-            </h3>
+            <div className="section-title" style={{ marginBottom: 18 }}>
+              <span>Recent field remarks</span>
+            </div>
 
             <div className="recent-list">
               {recent.reviews.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '24px', fontSize: '13px', color: '#6b7280' }}>
-                  No reviews received yet.
-                </div>
+                <p className="muted">No remarks received yet.</p>
               ) : (
-                recent.reviews.slice(0, 3).map((item) => (
-                  <div key={item._id} className="recent-item" style={{ cursor: 'default' }}>
-                    <div className="recent-avatar" style={{ color: '#00d2ff', background: 'rgba(0, 210, 255, 0.1)' }}>
-                      <MessageSquare size={18} />
-                    </div>
+                recent.reviews.slice(0, 4).map((item) => (
+                  <div key={item._id} className="recent-item" onClick={() => onNavigate('samplings')}>
+                    <div className="recent-avatar"><MessageSquare size={17} /></div>
                     <div className="recent-info">
-                      <div className="recent-name" style={{ color: '#00d2ff', fontSize: '13px', fontWeight: '700' }}>
-                        {item.name || item.shopName || 'Mechanic'}
+                      <div className="recent-name" dir="auto">
+                        {item.contactPerson || item.name || item.shopName || 'Mechanic'}
                       </div>
-                      <p style={{ fontSize: '13px', color: '#e5e7eb', marginTop: '4px', fontStyle: 'italic' }}>
-                        "{item.comment}"
+                      <p
+                        dir="auto"
+                        style={{
+                          fontSize: 12.5, color: 'var(--text-2)', marginTop: 3,
+                          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {item.comment}
                       </p>
                     </div>
                   </div>
@@ -268,94 +280,119 @@ function Dashboard({ token, onNavigate, showToast }) {
               )}
             </div>
           </div>
-
         </div>
 
-        {/* Right Columns: Current Visits & Recent Visits */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          {/* Current / Last Visiting Location */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
+
+          {/* Review coverage — one ratio, so the number leads */}
+          <div className="card" style={{ textAlign: 'center' }}>
+            <div className="section-title" style={{ marginBottom: 16, justifyContent: 'center' }}>
+              <span>Review coverage</span>
+            </div>
+
+            <div style={{ position: 'relative', height: 190 }}>
+              <Doughnut data={ringData} options={ringOptions} />
+              <div style={{
+                position: 'absolute', inset: 0, display: 'grid', placeContent: 'center',
+                pointerEvents: 'none'
+              }}>
+                <div style={{
+                  fontFamily: 'Outfit', fontSize: 38, fontWeight: 800,
+                  color: BRAND, lineHeight: 1, letterSpacing: '-0.02em'
+                }}>
+                  {reviewedPct}%
+                </div>
+                <div style={{
+                  fontSize: 10.5, color: INK_MUTED, textTransform: 'uppercase',
+                  letterSpacing: '0.09em', fontWeight: 700, marginTop: 6
+                }}>
+                  Reviewed
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 18, marginTop: 14, fontSize: 12.5 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }}>
+                <i style={{ width: 9, height: 9, borderRadius: 3, background: BRAND }} />
+                Reviewed <strong style={{ color: 'var(--text)' }}>{reviewReceived.toLocaleString()}</strong>
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }}>
+                <i style={{ width: 9, height: 9, borderRadius: 3, background: 'rgba(255,255,255,0.16)' }} />
+                Pending <strong style={{ color: 'var(--text)' }}>{pending.toLocaleString()}</strong>
+              </span>
+            </div>
+          </div>
+
           <div className="current-visit-card">
             <div className="current-visit-header">
-              <div className="pulse-indicator"></div>
-              <h3 style={{ fontFamily: 'Outfit', fontSize: '16px', fontWeight: '800', color: 'white', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Current Visiting Location
-              </h3>
+              <span className="pulse-indicator" />
+              <h3>Latest visit</h3>
             </div>
-            
+
             {currentVisit ? (
               <div className="current-visit-body">
-                <div style={{ fontSize: '20px', fontWeight: '800', color: 'white', fontFamily: 'Outfit' }}>
-                  {currentVisit.shopName || 'Unnamed Shop'}
+                <div style={{ fontFamily: 'Outfit', fontSize: 19, fontWeight: 800 }} dir="auto">
+                  {currentVisit.shopName?.trim() || 'Unnamed shop'}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#00d2ff', fontWeight: '600' }}>
-                  <MapPin size={14} />
-                  <span>{currentVisit.city || 'Unknown City'}, {currentVisit.address || 'No Address'}</span>
-                </div>
-                
-                <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '12px', padding: '12px', marginTop: '10px' }}>
-                  <div style={{ fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Clock size={10} /> Visit Date
-                  </div>
-                  <div style={{ fontSize: '13px', color: 'white', marginTop: '2px', fontWeight: '600' }}>
-                    {currentVisit.visitDate || currentVisit.date || 'No Date recorded'}
-                  </div>
+                <div
+                  dir="auto"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: BRAND, fontWeight: 600 }}
+                >
+                  <MapPin size={13} style={{ flexShrink: 0 }} />
+                  <span>{[currentVisit.city?.trim(), currentVisit.address?.trim()].filter(Boolean).join(' · ') || 'No location'}</span>
                 </div>
 
-                {currentVisit.location && (currentVisit.location.lat || currentVisit.location.lon) && (
-                  <div style={{ background: 'rgba(0, 210, 255, 0.03)', border: '1px solid rgba(0, 210, 255, 0.1)', borderRadius: '12px', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Compass size={10} /> GPS Coordinates
-                      </div>
-                      <div style={{ fontSize: '12px', color: 'white', marginTop: '2px', fontFamily: 'monospace' }}>
-                        Lat: {currentVisit.location.lat?.toFixed(5) || 'N/A'}, Lon: {currentVisit.location.lon?.toFixed(5) || 'N/A'}
+                <div className="info-tile">
+                  <span className="info-tile-label"><Clock size={10} /> Visit date</span>
+                  <div className="info-tile-value">{formatDate(visitDateOf(currentVisit)) || 'Not recorded'}</div>
+                </div>
+
+                {currentVisit.location?.lat != null && (
+                  <div className="info-tile" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <span className="info-tile-label"><Compass size={10} /> Coordinates</span>
+                      <div className="info-tile-value td-mono" style={{ fontSize: 12 }}>
+                        {currentVisit.location.lat.toFixed(5)}, {currentVisit.location.lon?.toFixed(5)}
                       </div>
                     </div>
-                    <a 
-                      href={`https://www.google.com/maps/search/?api=1&query=${currentVisit.location.lat},${currentVisit.location.lon}`} 
-                      target="_blank" 
+                    <a
+                      className="btn btn-primary btn-sm"
+                      href={`https://www.google.com/maps/search/?api=1&query=${currentVisit.location.lat},${currentVisit.location.lon}`}
+                      target="_blank"
                       rel="noopener noreferrer"
-                      className="btn btn-primary"
-                      style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '11px' }}
                     >
-                      Open Map
+                      <ExternalLink size={12} /> Map
                     </a>
                   </div>
                 )}
               </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: '20px', fontSize: '13px', color: '#6b7280' }}>
-                No active visits logged.
-              </div>
+              <p className="muted">No visits logged.</p>
             )}
           </div>
 
-          {/* Recent Visiting Locations Timeline */}
           <div className="card">
-            <div className="section-title" style={{ marginBottom: '20px' }}>
-              <span>Recent Visiting Locations</span>
+            <div className="section-title" style={{ marginBottom: 16 }}>
+              <span>Recent visits</span>
               <span className="section-link" onClick={() => onNavigate('samplings')}>
-                View All <ArrowRight size={12} style={{ display: 'inline', marginLeft: '2px', verticalAlign: 'middle' }} />
+                View all <ArrowRight size={12} />
               </span>
             </div>
 
             <div className="recent-list">
               {recentVisits.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '16px', fontSize: '12px', color: '#6b7280' }}>
-                  No other locations logged.
-                </div>
+                <p className="muted">No other visits logged.</p>
               ) : (
                 recentVisits.map((item) => (
                   <div key={item._id} className="recent-item" onClick={() => onNavigate('samplings')}>
                     <div className="recent-avatar">
-                      {item.shopName ? item.shopName[0].toUpperCase() : 'S'}
+                      <VisitThumb item={item} />
                     </div>
                     <div className="recent-info">
-                      <div className="recent-name">{item.shopName || 'Unnamed Shop'}</div>
+                      <div className="recent-name" dir="auto">{item.shopName?.trim() || 'Unnamed shop'}</div>
                       <div className="recent-meta">
-                        <span>{item.city || item.address || 'Unknown'}</span>
-                        <span>{item.visitDate || 'No Date'}</span>
+                        <span dir="auto">{item.city?.trim() || item.address?.trim() || 'Unknown'}</span>
+                        <span>{formatDate(visitDateOf(item)) || '—'}</span>
                       </div>
                     </div>
                   </div>
@@ -363,11 +400,8 @@ function Dashboard({ token, onNavigate, showToast }) {
               )}
             </div>
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }

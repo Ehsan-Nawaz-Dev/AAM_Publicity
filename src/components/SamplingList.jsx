@@ -1,377 +1,559 @@
-import React, { useState, useEffect } from 'react';
-import { Search, MapPin, Calendar, Smartphone, X, Image as ImageIcon, MessageSquare, Compass, Shield, Award } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Search, MapPin, Calendar, Phone, X, MessageSquare, Compass, Image as ImageIcon,
+  LayoutGrid, List, Store, Package, Clock, Hash, User, ChevronLeft, ChevronRight,
+  SlidersHorizontal, Inbox, ExternalLink, CreditCard
+} from 'lucide-react';
 
-function SamplingList({ token, showToast }) {
-  const [samples, setSamples] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [selectedCity, setSelectedCity] = useState('all');
-  const [selectedProvince, setSelectedProvince] = useState('all');
-  const [selectedSample, setSelectedSample] = useState(null);
+const PAGE_SIZE = 24;
 
-  useEffect(() => {
-    const fetchSamples = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch('/api/sampling', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (!res.ok) {
-          throw new Error('Failed to fetch mechanics data');
-        }
-        const data = await res.json();
-        setSamples(data);
-      } catch (err) {
-        console.error(err);
-        showToast('Failed to load mechanics data', 'error');
-      } finally {
-        setLoading(false);
-      }
-    };
+// The mobile app writes the visit date to `date`; some records use `visitDate`.
+// Fall back to the server timestamp so a record never renders as "No Date".
+const visitDateOf = (item) =>
+  item.visitDate || item.date || (item.createdAt ? item.createdAt.slice(0, 10) : '');
 
-    fetchSamples();
-  }, [token]);
+const formatDate = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
 
-  // Extract unique cities for the dropdown
-  const uniqueCities = ['all', ...new Set(samples.map(item => item.city).filter(Boolean))];
-
-  // List of standard provinces in Pakistan
-  const provincesList = [
-    { value: 'all', label: 'All Provinces' },
-    { value: 'punjab', label: 'Punjab' },
-    { value: 'sindh', label: 'Sindh' },
-    { value: 'kpk', label: 'Khyber Pakhtunkhwa (KPK)' },
-    { value: 'balochistan', label: 'Balochistan' },
-    { value: 'islamabad', label: 'Islamabad' },
-    { value: 'ajk', label: 'Azad Kashmir' },
-    { value: 'gb', label: 'Gilgit-Baltistan' }
-  ];
-
-  // Helper to match state names to normalized province keys
-  const matchProvince = (itemState, selectedKey) => {
-    if (selectedKey === 'all') return true;
-    if (!itemState) return false;
-    
-    const stateStr = itemState.toLowerCase();
-    
-    if (selectedKey === 'punjab' && stateStr.includes('punjab')) return true;
-    if (selectedKey === 'sindh' && stateStr.includes('sindh')) return true;
-    if (selectedKey === 'kpk' && (stateStr.includes('kpk') || stateStr.includes('khyber') || stateStr.includes('pk'))) return true;
-    if (selectedKey === 'balochistan' && stateStr.includes('baloch')) return true;
-    if (selectedKey === 'islamabad' && (stateStr.includes('islamabad') || stateStr.includes('capital'))) return true;
-    if (selectedKey === 'ajk' && (stateStr.includes('kashmir') || stateStr.includes('ajk'))) return true;
-    if (selectedKey === 'gb' && (stateStr.includes('gilgit') || stateStr.includes('gb'))) return true;
-    
-    return false;
-  };
-
-  // Search & Multi-dropdown Filter
-  const filteredSamples = samples.filter(item => {
-    // 1. Text Search Filter
-    const term = search.toLowerCase();
-    const matchesText = !term || (
-      (item.shopName || '').toLowerCase().includes(term) ||
-      (item.name || item.contactPerson || '').toLowerCase().includes(term) ||
-      (item.mobile || '').toLowerCase().includes(term) ||
-      (item.city || '').toLowerCase().includes(term) ||
-      (item.comment || '').toLowerCase().includes(term) ||
-      (item.products || []).some(p => p.toLowerCase().includes(term))
-    );
-
-    // 2. City Dropdown Filter
-    const matchesCity = selectedCity === 'all' || (item.city && item.city.toLowerCase() === selectedCity.toLowerCase());
-
-    // 3. Province Dropdown Filter
-    const matchesProvince = matchProvince(item.state || item.province, selectedProvince);
-
-    return matchesText && matchesCity && matchesProvince;
+const formatDateTime = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
   });
+};
 
-  // Formatter for CNIC displays or default mock id
-  const formatCNIC = (item) => {
-    if (item.cnic) return item.cnic;
-    // Generate a unique dummy CNIC from the ID to make it look authentic
-    const hash = item._id ? item._id.substring(18) : '12345';
-    return `35201-${parseInt(hash, 16) % 10000000}-${1}`;
-  };
+const nameOf = (item) => item.contactPerson || item.name || 'Unnamed Mechanic';
+const initialOf = (item) => (nameOf(item).trim()[0] || '?').toUpperCase();
+const productsOf = (item) => {
+  const list = Array.isArray(item.products) ? item.products.filter(Boolean) : [];
+  if (list.length) return list;
+  return item.product ? [item.product] : [];
+};
 
-  if (loading) {
-    return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p style={{ color: '#9ca3af', fontSize: '14px', marginTop: '16px' }}>Fetching records...</p>
-      </div>
-    );
+// Many stored photo URLs are dead. Degrade to the mechanic's initial rather than
+// a remote placeholder, which would just be a second thing that can fail.
+function Avatar({ item, imgClass, fallbackClass, onClick }) {
+  const [broken, setBroken] = useState(false);
+  const src = item.images?.[0];
+
+  if (!src || broken) {
+    return <div className={fallbackClass} onClick={onClick}>{initialOf(item)}</div>;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      
-      {/* Top filter section */}
+    <img
+      src={src}
+      alt={nameOf(item)}
+      className={imgClass}
+      loading="lazy"
+      onClick={onClick}
+      onError={() => setBroken(true)}
+    />
+  );
+}
+
+function Field({ label, value, icon, href, mono }) {
+  const empty = value === undefined || value === null || String(value).trim() === '';
+  return (
+    <div className="field-cell">
+      <span className="field-label">{icon}{label}</span>
+      <div
+        className={`field-value ${empty ? 'empty' : ''} ${mono ? 'td-mono' : ''}`}
+        dir={mono ? 'ltr' : 'auto'}
+      >
+        {empty ? 'Not recorded' : href ? <a href={href}>{value}</a> : value}
+      </div>
+    </div>
+  );
+}
+
+function SamplingList({ token, showToast }) {
+  const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+
+  const [cities, setCities] = useState([]);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [city, setCity] = useState('');
+  const [sort, setSort] = useState('newest');
+  const [view, setView] = useState('grid');
+
+  const [selected, setSelected] = useState(null);
+  const [lightbox, setLightbox] = useState(null);
+
+  // Debounce typing so a 1,300-record collection isn't queried on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    fetch('/api/mechanics/cities', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setCities)
+      .catch(() => setCities([]));
+  }, [token]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(PAGE_SIZE),
+        sort
+      });
+      if (search) params.set('search', search);
+      if (city) params.set('city', city);
+
+      const res = await fetch(`/api/mechanics?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to fetch mechanics data');
+
+      const data = await res.json();
+      setItems(data.items || []);
+      setTotal(data.total || 0);
+      setPages(data.pages || 1);
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to load mechanics data', 'error');
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, page, search, city, sort, showToast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Close the modal / lightbox on Escape.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (lightbox) setLightbox(null);
+      else if (selected) setSelected(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightbox, selected]);
+
+  const clearFilters = () => {
+    setSearchInput('');
+    setCity('');
+    setSort('newest');
+    setPage(1);
+  };
+
+  const hasFilters = Boolean(search || city);
+  const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, total);
+
+  // Windowed page numbers: 1 … 4 5 [6] 7 8 … 58
+  const pageNumbers = () => {
+    const out = [];
+    const push = (n) => out.push(n);
+    const span = 1;
+    const start = Math.max(2, page - span);
+    const end = Math.min(pages - 1, page + span);
+
+    push(1);
+    if (start > 2) push('…');
+    for (let i = start; i <= end; i++) push(i);
+    if (end < pages - 1) push('…');
+    if (pages > 1) push(pages);
+    return out;
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* Toolbar */}
       <div className="filter-bar">
-        
-        {/* Search bar wrapper */}
         <div className="search-input-wrapper">
           <Search />
           <input
             type="text"
-            placeholder="Search by name, shop, city, comments..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, shop, mobile, city, address, remarks…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            dir="auto"
           />
+          {searchInput && (
+            <button className="search-clear" onClick={() => setSearchInput('')} aria-label="Clear search">
+              <X size={14} />
+            </button>
+          )}
         </div>
 
-        {/* City Filter */}
-        <div className="filter-group">
-          <label style={{ fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', fontWeight: '600' }}>City</label>
-          <select 
-            className="filter-select"
-            value={selectedCity}
-            onChange={(e) => setSelectedCity(e.target.value)}
+        <select
+          className="filter-select"
+          value={city}
+          onChange={(e) => { setCity(e.target.value); setPage(1); }}
+          aria-label="Filter by city"
+        >
+          <option value="">All cities ({cities.length})</option>
+          {cities.map((c) => (
+            <option key={c.city} value={c.city}>{c.city} ({c.count})</option>
+          ))}
+        </select>
+
+        <select
+          className="filter-select"
+          value={sort}
+          onChange={(e) => { setSort(e.target.value); setPage(1); }}
+          aria-label="Sort order"
+        >
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="shop">Shop name (A–Z)</option>
+          <option value="city">Group by city</option>
+        </select>
+
+        <div className="segmented">
+          <button
+            className={view === 'grid' ? 'active' : ''}
+            onClick={() => setView('grid')}
+            title="Card view"
+            aria-label="Card view"
           >
-            <option value="all">All Cities</option>
-            {uniqueCities.filter(c => c !== 'all').map(city => (
-              <option key={city} value={city}>{city}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Province Filter */}
-        <div className="filter-group">
-          <label style={{ fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', fontWeight: '600' }}>Province</label>
-          <select 
-            className="filter-select"
-            value={selectedProvince}
-            onChange={(e) => setSelectedProvince(e.target.value)}
+            <LayoutGrid size={16} />
+          </button>
+          <button
+            className={view === 'table' ? 'active' : ''}
+            onClick={() => setView('table')}
+            title="Table view"
+            aria-label="Table view"
           >
-            {provincesList.map(prov => (
-              <option key={prov.value} value={prov.value}>{prov.label}</option>
-            ))}
-          </select>
+            <List size={16} />
+          </button>
         </div>
-
       </div>
 
-      {/* Grid List View */}
-      <div className="mechanics-grid">
-        {filteredSamples.length === 0 ? (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px 20px', color: '#6b7280', fontSize: '14px' }}>
-            {search || selectedCity !== 'all' || selectedProvince !== 'all' 
-              ? 'No matching mechanics found' 
-              : 'No mechanics registered in the database yet'}
+      {/* Result count — the number the dashboard reports must match what's listed */}
+      <div className="toolbar-meta">
+        <div>
+          {loading ? 'Loading…' : total === 0 ? 'No records' : (
+            <>Showing <strong>{from.toLocaleString()}–{to.toLocaleString()}</strong> of <strong>{total.toLocaleString()}</strong> mechanics</>
+          )}
+        </div>
+
+        {hasFilters && (
+          <div className="chip-row">
+            {search && (
+              <span className="chip" dir="auto">
+                “{search}”
+                <button onClick={() => setSearchInput('')} aria-label="Clear search"><X size={12} /></button>
+              </span>
+            )}
+            {city && (
+              <span className="chip" dir="auto">
+                <MapPin size={11} /> {city}
+                <button onClick={() => { setCity(''); setPage(1); }} aria-label="Clear city"><X size={12} /></button>
+              </span>
+            )}
+            <button className="btn btn-ghost btn-sm" onClick={clearFilters}>
+              <SlidersHorizontal size={12} /> Reset
+            </button>
           </div>
-        ) : (
-          filteredSamples.map((item) => {
-            const photoUrl = item.images && item.images.length > 0 
-              ? item.images[0] 
-              : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80';
-            
-            return (
-              <div
-                key={item._id}
-                className="mechanic-grid-card"
-                onClick={() => setSelectedSample(item)}
-              >
-                <img 
-                  src={photoUrl} 
-                  alt={item.contactPerson || 'Mechanic'} 
-                  className="mechanic-photo-circle"
-                  onError={(e) => {
-                    e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80';
-                  }}
-                />
-
-                <h3>{item.contactPerson || item.name || 'Unnamed Mechanic'}</h3>
-                <div className="mechanic-shop">{item.shopName || 'No Shop Name'}</div>
-                <div className="mechanic-city-tag">{item.city || 'No City'}</div>
-
-                <div className="mechanic-meta-row">
-                  <span>{item.mobile || 'No Mobile'}</span>
-                  <span>{item.visitDate || 'No Date'}</span>
-                </div>
-              </div>
-            );
-          })
         )}
       </div>
 
-      {/* Premium National ID Card Detail Modal */}
-      {selectedSample && (
-        <div className="modal-overlay" onClick={() => setSelectedSample(null)}>
-          <div className="id-card-modal-container" onClick={(e) => e.stopPropagation()}>
-            
-            {/* Close Button */}
-            <button className="modal-close-btn" onClick={() => setSelectedSample(null)}>
-              <X size={16} />
-            </button>
-
-            {/* National ID Card Layout */}
-            <div className="national-id-card">
-              
-              {/* Header */}
-              <div className="id-card-header">
-                <div className="id-card-header-left">
-                  <span className="id-card-org">Aampower Logistics</span>
-                  <span className="id-card-type">Registered Mechanic Identity</span>
-                </div>
-                <div className="id-card-header-chip"></div>
-              </div>
-
-              {/* Body */}
-              <div className="id-card-body">
-                {/* Photo */}
-                <div className="id-card-photo-area">
-                  <img 
-                    src={selectedSample.images && selectedSample.images.length > 0 ? selectedSample.images[0] : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80'} 
-                    alt="Mechanic" 
-                    className="id-card-photo"
-                    onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80' }}
-                  />
-                </div>
-
-                {/* Fields */}
-                <div className="id-card-fields">
-                  <div className="id-field">
-                    <span className="id-field-label">Name</span>
-                    <span className="id-field-value">{selectedSample.contactPerson || selectedSample.name || 'N/A'}</span>
-                  </div>
-
-                  <div className="id-field">
-                    <span className="id-field-label">Father's Name</span>
-                    <span className="id-field-value">{selectedSample.fatherName || 'N/A'}</span>
-                  </div>
-
-                  <div className="id-field">
-                    <span className="id-field-label">Identity Number</span>
-                    <span className="id-field-value">{formatCNIC(selectedSample)}</span>
-                  </div>
-
-                  <div className="id-field">
-                    <span className="id-field-label">Mobile</span>
-                    <span className="id-field-value">{selectedSample.mobile || 'N/A'}</span>
-                  </div>
-
-                  <div className="id-field" style={{ gridColumn: '1 / -1' }}>
-                    <span className="id-field-label">City / Province</span>
-                    <span className="id-field-value">{selectedSample.city || 'N/A'} / {selectedSample.state || 'Punjab'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="id-card-footer">
-                <span>VERIFIED OPERATIONAL CARD</span>
-                <span className="id-card-barcode">||| | || |||| | |</span>
-              </div>
-
+      {/* Results */}
+      {loading ? (
+        <div className="mechanics-grid">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="skeleton-card">
+              <div className="skeleton" style={{ width: 74, height: 74, borderRadius: '50%' }} />
+              <div className="skeleton" style={{ width: '65%', height: 14 }} />
+              <div className="skeleton" style={{ width: '45%', height: 11 }} />
+              <div className="skeleton" style={{ width: '80%', height: 30, marginTop: 8 }} />
             </div>
-
-            {/* Extra Details Area (Comments, Locations, attachments) */}
-            <div className="id-card-modal-details">
-              
-              {/* Shop & Address */}
-              <div className="id-detail-section">
-                <div className="id-detail-title">Shop Details</div>
-                <div className="id-detail-text" style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                  <MapPin size={16} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: '2px' }} />
-                  <span>
-                    <strong>{selectedSample.shopName || 'Unnamed Shop'}</strong>
-                    {selectedSample.address ? ` - ${selectedSample.address}` : ''}
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon"><Inbox size={24} /></div>
+          <h4>{hasFilters ? 'No matching mechanics' : 'No mechanics registered yet'}</h4>
+          <p>
+            {hasFilters
+              ? 'No record matches the current search and filters. Try broadening them.'
+              : 'Records submitted from the field app will appear here.'}
+          </p>
+          {hasFilters && (
+            <button className="btn btn-secondary btn-sm" onClick={clearFilters}>Clear filters</button>
+          )}
+        </div>
+      ) : view === 'grid' ? (
+        <div className="mechanics-grid">
+          {items.map((item) => {
+            const products = productsOf(item);
+            return (
+              <div key={item._id} className="mechanic-grid-card" onClick={() => setSelected(item)}>
+                <div className="mechanic-card-flags">
+                  <span className={`flag-dot ${item.images?.length ? 'on' : ''}`} title={`${item.images?.length || 0} photo(s)`}>
+                    <ImageIcon size={11} />
+                  </span>
+                  <span className={`flag-dot ${item.comment ? 'on' : ''}`} title={item.comment ? 'Has remarks' : 'No remarks'}>
+                    <MessageSquare size={11} />
                   </span>
                 </div>
+
+                <Avatar
+                  item={item}
+                  imgClass="mechanic-photo-circle"
+                  fallbackClass="mechanic-avatar-fallback"
+                />
+
+                <h3 dir="auto" title={nameOf(item)}>{nameOf(item)}</h3>
+                <div className="mechanic-shop" dir="auto" title={item.shopName || ''}>
+                  {item.shopName?.trim() || 'No shop name'}
+                </div>
+                <div className="mechanic-city-tag" dir="auto">{item.city?.trim() || 'No city'}</div>
+
+                {products.length > 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 10 }} dir="auto">
+                    {products.length === 1 ? products[0] : `${products.length} products`}
+                  </div>
+                )}
+
+                <div className="mechanic-meta-row">
+                  <span dir="ltr">{item.mobile || '—'}</span>
+                  <span>{formatDate(visitDateOf(item)) || '—'}</span>
+                </div>
               </div>
-
-              {/* Products List */}
-              {((selectedSample.products && selectedSample.products.length > 0) || selectedSample.product) && (
-                <div className="id-detail-section">
-                  <div className="id-detail-title">Catalog Products logged</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
-                    {selectedSample.products && selectedSample.products.length > 0 ? (
-                      selectedSample.products.map((p, i) => (
-                        <span key={i} style={{ background: 'rgba(0, 210, 255, 0.12)', color: '#00d2ff', fontSize: '11px', padding: '3px 8px', borderRadius: '6px', fontWeight: '600' }}>
-                          {p}
-                        </span>
-                      ))
-                    ) : (
-                      <span style={{ background: 'rgba(0, 210, 255, 0.12)', color: '#00d2ff', fontSize: '11px', padding: '3px 8px', borderRadius: '6px', fontWeight: '600' }}>
-                        {selectedSample.product}
+            );
+          })}
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 52 }}></th>
+                  <th>Mechanic</th>
+                  <th>Shop</th>
+                  <th>Mobile</th>
+                  <th>City</th>
+                  <th>Address</th>
+                  <th>Visit date</th>
+                  <th style={{ width: 70 }}>Media</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item._id} onClick={() => setSelected(item)}>
+                    <td>
+                      <Avatar item={item} imgClass="td-avatar" fallbackClass="td-avatar td-avatar-fallback" />
+                    </td>
+                    <td className="td-primary"><span className="td-truncate" dir="auto">{nameOf(item)}</span></td>
+                    <td><span className="td-truncate" dir="auto">{item.shopName?.trim() || '—'}</span></td>
+                    <td className="td-mono" dir="ltr">{item.mobile || '—'}</td>
+                    <td dir="auto">{item.city?.trim() || '—'}</td>
+                    <td className="td-muted"><span className="td-truncate" dir="auto">{item.address?.trim() || '—'}</span></td>
+                    <td className="td-muted td-mono">{formatDate(visitDateOf(item)) || '—'}</td>
+                    <td className="td-muted">
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                        <ImageIcon size={13} /> {item.images?.length || 0}
                       </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Comments & Remarks */}
-              {selectedSample.comment && (
-                <div className="id-detail-section">
-                  <div className="id-detail-title">Auditor Remarks & Comments</div>
-                  <div className="id-detail-text" style={{
-                    background: 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid rgba(255, 255, 255, 0.04)',
-                    padding: '10px 14px',
-                    borderRadius: '12px',
-                    fontSize: '13px',
-                    fontStyle: 'italic',
-                    color: '#e5e7eb',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '8px'
-                  }}>
-                    <MessageSquare size={14} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: '2px' }} />
-                    <span>"{selectedSample.comment}"</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Location Coordinate Preview */}
-              {selectedSample.location && (selectedSample.location.lat || selectedSample.location.lon) && (
-                <div className="id-detail-section">
-                  <div className="id-detail-title">Coordinates</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255, 255, 255, 0.01)', border: '1px solid rgba(255, 255, 255, 0.03)', padding: '10px 14px', borderRadius: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#9ca3af', fontFamily: 'monospace' }}>
-                      <Compass size={14} style={{ color: 'var(--primary)' }} />
-                      <span>LAT: {selectedSample.location.lat.toFixed(5)}, LON: {selectedSample.location.lon.toFixed(5)}</span>
-                    </div>
-                    <a 
-                      href={`https://www.google.com/maps/search/?api=1&query=${selectedSample.location.lat},${selectedSample.location.lon}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="btn btn-secondary"
-                      style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '6px' }}
-                    >
-                      Open Google Maps
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {/* Attachments */}
-              {selectedSample.images && selectedSample.images.length > 0 && (
-                <div className="id-detail-section" style={{ marginBottom: 0 }}>
-                  <div className="id-detail-title">Attached Media ({selectedSample.images.length})</div>
-                  <div className="id-detail-photos">
-                    {selectedSample.images.map((img, i) => (
-                      <img 
-                        key={i} 
-                        src={img} 
-                        alt="attachment" 
-                        className="id-detail-photo-thumb"
-                        onClick={() => window.open(img, '_blank')}
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            </div>
-
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
+      {/* Pagination */}
+      {!loading && pages > 1 && (
+        <div className="pagination">
+          <span className="muted">Page {page} of {pages.toLocaleString()}</span>
+          <div className="pager">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} aria-label="Previous page">
+              <ChevronLeft size={15} />
+            </button>
+            {pageNumbers().map((n, i) =>
+              n === '…' ? (
+                <button key={`e${i}`} className="ellipsis" disabled>…</button>
+              ) : (
+                <button
+                  key={n}
+                  className={n === page ? 'active' : ''}
+                  onClick={() => setPage(n)}
+                >
+                  {n}
+                </button>
+              )
+            )}
+            <button onClick={() => setPage((p) => Math.min(pages, p + 1))} disabled={page === pages} aria-label="Next page">
+              <ChevronRight size={15} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Detail — every stored field, nothing invented */}
+      {selected && (
+        <div className="modal-overlay" onClick={() => setSelected(null)}>
+          <div className="detail-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setSelected(null)} aria-label="Close">
+              <X size={15} />
+            </button>
+
+            <div className="detail-hero">
+              <Avatar
+                item={selected}
+                imgClass="detail-hero-photo"
+                fallbackClass="detail-hero-fallback"
+                onClick={() => selected.images?.[0] && setLightbox(selected.images[0])}
+              />
+
+              <div className="detail-hero-info">
+                <div className="detail-hero-org">AAM Power · Registered Mechanic</div>
+                <div className="detail-hero-name" dir="auto">{nameOf(selected)}</div>
+                <div className="detail-hero-shop" dir="auto">
+                  {selected.shopName?.trim() || 'No shop name recorded'}
+                </div>
+                <div className="detail-hero-badges">
+                  {selected.city?.trim() && (
+                    <span className="badge badge-primary" dir="auto"><MapPin size={11} /> {selected.city.trim()}</span>
+                  )}
+                  {visitDateOf(selected) && (
+                    <span className="badge badge-neutral"><Calendar size={11} /> {formatDate(visitDateOf(selected))}</span>
+                  )}
+                  {selected.comment && <span className="badge badge-emerald"><MessageSquare size={11} /> Reviewed</span>}
+                  {selected.images?.length > 0 && (
+                    <span className="badge badge-amber"><ImageIcon size={11} /> {selected.images.length} photo{selected.images.length > 1 ? 's' : ''}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="detail-body">
+              <section>
+                <div className="detail-section-title"><User size={12} /> Identity &amp; contact</div>
+                <div className="field-grid">
+                  <Field label="Name" icon={<User size={10} />} value={selected.contactPerson || selected.name} />
+                  <Field label="Father's name" value={selected.fatherName} />
+                  <Field
+                    label="Mobile"
+                    icon={<Phone size={10} />}
+                    value={selected.mobile}
+                    href={selected.mobile ? `tel:${selected.mobile}` : undefined}
+                    mono
+                  />
+                  <Field label="CNIC" icon={<CreditCard size={10} />} value={selected.cnic} mono />
+                  <Field label="Email" value={selected.email} href={selected.email ? `mailto:${selected.email}` : undefined} />
+                  <Field label="Province" value={selected.state || selected.province} />
+                </div>
+              </section>
+
+              <section>
+                <div className="detail-section-title"><Store size={12} /> Shop &amp; location</div>
+                <div className="field-grid">
+                  <Field label="Shop name" icon={<Store size={10} />} value={selected.shopName} />
+                  <Field label="City" icon={<MapPin size={10} />} value={selected.city?.trim()} />
+                  <Field label="Address" value={selected.address} />
+                  <Field label="Visit date" icon={<Calendar size={10} />} value={formatDate(visitDateOf(selected))} />
+                </div>
+              </section>
+
+              {productsOf(selected).length > 0 && (
+                <section>
+                  <div className="detail-section-title"><Package size={12} /> Products logged</div>
+                  <div className="chip-row">
+                    {productsOf(selected).map((p, i) => (
+                      <span key={i} className="chip" dir="auto" style={{ paddingRight: 10 }}>{p}</span>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {selected.comment && (
+                <section>
+                  <div className="detail-section-title"><MessageSquare size={12} /> Field remarks</div>
+                  <blockquote className="quote-block" dir="auto">{selected.comment}</blockquote>
+                </section>
+              )}
+
+              {selected.review && (
+                <section>
+                  <div className="detail-section-title"><MessageSquare size={12} /> Review</div>
+                  <blockquote className="quote-block" dir="auto">{selected.review}</blockquote>
+                </section>
+              )}
+
+              {selected.location && (selected.location.lat || selected.location.lon) && (
+                <section>
+                  <div className="detail-section-title"><Compass size={12} /> GPS coordinates</div>
+                  <div className="coord-row">
+                    <span className="coord-val">
+                      <Compass size={14} style={{ color: 'var(--primary)' }} />
+                      {selected.location.lat?.toFixed(5)}, {selected.location.lon?.toFixed(5)}
+                    </span>
+                    <a
+                      className="btn btn-secondary btn-sm"
+                      href={`https://www.google.com/maps/search/?api=1&query=${selected.location.lat},${selected.location.lon}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink size={12} /> Open in Maps
+                    </a>
+                  </div>
+                </section>
+              )}
+
+              {selected.images?.length > 0 && (
+                <section>
+                  <div className="detail-section-title">
+                    <ImageIcon size={12} /> Attached media ({selected.images.length})
+                  </div>
+                  <div className="photo-grid">
+                    {selected.images.map((img, i) => (
+                      <img
+                        key={i}
+                        src={img}
+                        alt={`Attachment ${i + 1}`}
+                        className="photo-thumb"
+                        loading="lazy"
+                        onClick={() => setLightbox(img)}
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              <section>
+                <div className="detail-section-title"><Clock size={12} /> Record metadata</div>
+                <div className="field-grid">
+                  <Field label="Submitted" icon={<Clock size={10} />} value={formatDateTime(selected.createdAt)} mono />
+                  <Field label="Last updated" value={formatDateTime(selected.updatedAt)} mono />
+                  <Field label="Record ID" icon={<Hash size={10} />} value={selected._id} mono />
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {lightbox && (
+        <div className="lightbox" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="Attachment full size" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
     </div>
   );
 }
