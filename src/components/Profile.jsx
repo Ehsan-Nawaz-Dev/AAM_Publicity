@@ -21,7 +21,7 @@ function Profile({ token, onLogout, onUserUpdate, showToast }) {
   // Password change states
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [showPasswordDrawer, setShowPasswordDrawer] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -166,7 +166,7 @@ function Profile({ token, onLogout, onUserUpdate, showToast }) {
 
       setOldPassword('');
       setNewPassword('');
-      setShowPasswordDrawer(false);
+      setShowPasswordForm(false);
       showToast('Password changed successfully!');
     } catch (err) {
       console.error(err);
@@ -178,299 +178,320 @@ function Profile({ token, onLogout, onUserUpdate, showToast }) {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: '12px' }}>
-        <div style={{
-          width: '32px',
-          height: '32px',
-          border: '2.5px solid rgba(255, 82, 82, 0.1)',
-          borderTopColor: '#ff5252',
-          borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite'
-        }}></div>
-        <p style={{ color: '#9ca3af', fontSize: '13px' }}>Loading configuration...</p>
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p style={{ color: '#9ca3af', fontSize: '14px', marginTop: '16px' }}>Loading configuration...</p>
       </div>
     );
   }
 
+  const userAvatarUrl = profile?.profileImage 
+    ? (profile.profileImage.startsWith('http') || profile.profileImage.startsWith('/uploads') || profile.profileImage.startsWith('/tmp') ? profile.profileImage : '/api' + profile.profileImage.replace('file://', ''))
+    : null;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div className="profile-container">
       
-      {/* Profile Banner */}
-      <div className="card profile-header-card" style={{ marginBottom: '8px' }}>
-        <div className="profile-avatar-container">
-          {profile?.profileImage ? (
-            <img src={profile.profileImage} alt="User Avatar" className="profile-avatar" />
+      {/* Left Column: Avatar & Brand Card */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div className="card profile-avatar-card">
+          <div className="profile-avatar-container">
+            {userAvatarUrl ? (
+              <img src={userAvatarUrl} alt="User Avatar" className="profile-avatar" onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80' }} />
+            ) : (
+              <div className="profile-avatar-placeholder">
+                {profile?.name ? profile.name[0].toUpperCase() : 'A'}
+              </div>
+            )}
+            
+            <label className="profile-avatar-upload">
+              <Upload size={14} />
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                ref={avatarInputRef}
+                onChange={handleAvatarUpload}
+                disabled={uploadingAvatar}
+              />
+            </label>
+          </div>
+
+          <h3 style={{ fontFamily: 'Outfit', fontSize: '20px', fontWeight: '800', color: 'white', marginTop: '12px' }}>
+            {profile?.name || 'AAM User'}
+          </h3>
+          <p className="profile-role" style={{ fontSize: '14px', color: 'var(--primary)', fontWeight: '600', marginTop: '2px' }}>
+            @{profile?.username || 'admin'}
+          </p>
+
+          <button 
+            onClick={onLogout} 
+            className="btn btn-secondary" 
+            style={{ width: '100%', marginTop: '30px', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+          >
+            <LogOut size={16} /> Sign Out of Account
+          </button>
+        </div>
+      </div>
+
+      {/* Right Column: Personal Information & Security */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        
+        {/* Personal Details Card */}
+        <div className="card" style={{ padding: '30px' }}>
+          <div className="section-title" style={{ marginBottom: '24px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px' }}>
+            <span style={{ fontSize: '18px', fontWeight: '800' }}>Personal Details</span>
+            <span 
+              className="section-link" 
+              onClick={() => {
+                if (isEditing) {
+                  setIsEditing(false);
+                  fetchProfile();
+                } else {
+                  setIsEditing(true);
+                }
+              }}
+            >
+              {isEditing ? 'Cancel' : 'Edit Profile'}
+            </span>
+          </div>
+
+          {isEditing ? (
+            <form onSubmit={handleProfileSave}>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label">First Name</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    disabled={saving}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Last Name</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    disabled={saving}
+                  />
+                </div>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label">Phone Number</label>
+                  <input
+                    type="tel"
+                    className="form-input"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    disabled={saving}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">CNIC Number</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="35201-XXXXXXXX-X"
+                    value={cnic}
+                    onChange={(e) => setCnic(e.target.value)}
+                    disabled={saving}
+                  />
+                </div>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label">Date of Birth</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                    disabled={saving}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Gender</label>
+                  <select
+                    className="form-input"
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    disabled={saving}
+                    style={{ background: 'rgba(25, 27, 44, 0.9)', height: '42px', border: '1px solid var(--card-border)' }}
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label">City</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    disabled={saving}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">State / Province</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={state}
+                    onChange={(e) => setState(e.target.value)}
+                    disabled={saving}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Address</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  disabled={saving}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '30px' }}>
+                <label className="form-label">ZIP Code</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={zipCode}
+                  onChange={(e) => setZipCode(e.target.value)}
+                  disabled={saving}
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? 'Saving changes...' : 'Save Settings'}
+              </button>
+            </form>
           ) : (
-            <div className="profile-avatar-placeholder">
-              {profile?.name ? profile.name[0].toUpperCase() : 'U'}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', borderRadius: '14px' }}>
+                <ShieldCheck size={20} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                <div>
+                  <span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', textTransform: 'uppercase', fontWeight: '600' }}>CNIC Card</span>
+                  <strong style={{ fontSize: '14px' }}>{profile?.cnic || 'Not Specified'}</strong>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', borderRadius: '14px' }}>
+                <Phone size={20} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                <div>
+                  <span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', textTransform: 'uppercase', fontWeight: '600' }}>Mobile Phone</span>
+                  <strong style={{ fontSize: '14px' }}>{profile?.phone || 'Not Specified'}</strong>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', borderRadius: '14px' }}>
+                <Calendar size={20} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                <div>
+                  <span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', textTransform: 'uppercase', fontWeight: '600' }}>Birth Date / Gender</span>
+                  <strong style={{ fontSize: '14px' }}>{profile?.birthDate || 'N/A'} • {profile?.gender || 'Male'}</strong>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', borderRadius: '14px', gridColumn: '1 / -1' }}>
+                <MapPin size={20} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                <div>
+                  <span style={{ color: '#9ca3af', display: 'block', fontSize: '11px', textTransform: 'uppercase', fontWeight: '600' }}>Address Location</span>
+                  <strong style={{ fontSize: '14px' }}>
+                    {profile?.address ? `${profile.address}, ` : ''}{profile?.city || 'No City'}{profile?.state ? `, ${profile.state}` : ''}
+                  </strong>
+                </div>
+              </div>
+
             </div>
           )}
-          
-          <label className="profile-avatar-upload">
-            <Upload size={12} />
-            <input
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              ref={avatarInputRef}
-              onChange={handleAvatarUpload}
-              disabled={uploadingAvatar}
-            />
-          </label>
         </div>
 
-        <h3 className="profile-username">{profile?.name || 'AAM User'}</h3>
-        <p className="profile-role">@{profile?.username || 'user'}</p>
-      </div>
+        {/* Security Options Card */}
+        <div className="card" style={{ padding: '30px' }}>
+          <h3 className="section-title" style={{ marginBottom: '20px' }}>
+            <span>Account Security</span>
+          </h3>
 
-      {/* Profile Details Card */}
-      <div className="card" style={{ padding: '16px', marginBottom: '8px' }}>
-        <div className="section-title">
-          <span>Personal Information</span>
-          <span 
-            className="section-link" 
-            onClick={() => {
-              if (isEditing) {
-                // Cancel
-                setIsEditing(false);
-                fetchProfile();
-              } else {
-                setIsEditing(true);
-              }
-            }}
-          >
-            {isEditing ? 'Cancel' : 'Edit Info'}
-          </span>
-        </div>
-
-        {isEditing ? (
-          <form onSubmit={handleProfileSave} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <div className="input-group" style={{ marginBottom: '0' }}>
-                <label className="input-label">First Name</label>
-                <input
-                  type="text"
-                  className="form-control no-icon"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-              <div className="input-group" style={{ marginBottom: '0' }}>
-                <label className="input-label">Last Name</label>
-                <input
-                  type="text"
-                  className="form-control no-icon"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-            </div>
-
-            <div className="input-group" style={{ marginBottom: '0' }}>
-              <label className="input-label">Phone Number</label>
-              <input
-                type="tel"
-                className="form-control no-icon"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                disabled={saving}
-              />
-            </div>
-
-            <div className="input-group" style={{ marginBottom: '0' }}>
-              <label className="input-label">CNIC Number</label>
-              <input
-                type="text"
-                className="form-control no-icon"
-                value={cnic}
-                onChange={(e) => setCnic(e.target.value)}
-                disabled={saving}
-              />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '10px' }}>
-              <div className="input-group" style={{ marginBottom: '0' }}>
-                <label className="input-label">Date of Birth</label>
-                <input
-                  type="date"
-                  className="form-control no-icon"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-              <div className="input-group" style={{ marginBottom: '0' }}>
-                <label className="input-label">Gender</label>
-                <select
-                  className="form-control no-icon"
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                  disabled={saving}
-                  style={{ background: 'rgba(255, 255, 255, 0.05)', color: '#fff', border: '1px solid var(--card-border)', borderRadius: '12px', height: '45px' }}
-                >
-                  <option value="Male" style={{ background: '#161826' }}>Male</option>
-                  <option value="Female" style={{ background: '#161826' }}>Female</option>
-                  <option value="Other" style={{ background: '#161826' }}>Other</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '10px' }}>
-              <div className="input-group" style={{ marginBottom: '0' }}>
-                <label className="input-label">City</label>
-                <input
-                  type="text"
-                  className="form-control no-icon"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-              <div className="input-group" style={{ marginBottom: '0' }}>
-                <label className="input-label">State</label>
-                <input
-                  type="text"
-                  className="form-control no-icon"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-            </div>
-
-            <div className="input-group" style={{ marginBottom: '0' }}>
-              <label className="input-label">Address</label>
-              <input
-                type="text"
-                className="form-control no-icon"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                disabled={saving}
-              />
-            </div>
-
-            <div className="input-group" style={{ marginBottom: '8px' }}>
-              <label className="input-label">ZIP Code</label>
-              <input
-                type="text"
-                className="form-control no-icon"
-                value={zipCode}
-                onChange={(e) => setZipCode(e.target.value)}
-                disabled={saving}
-              />
-            </div>
-
-            <button type="submit" className="btn btn-primary" style={{ padding: '10px 14px', fontSize: '13px' }} disabled={saving}>
-              {saving ? 'Saving changes...' : 'Save Settings'}
+          {!showPasswordForm ? (
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={() => setShowPasswordForm(true)}
+              style={{ display: 'flex', gap: '8px' }}
+            >
+              <Lock size={16} /> Update Account Password
             </button>
-          </form>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-              <ShieldCheck size={16} style={{ color: 'var(--primary)' }} />
-              <div>
-                <span style={{ color: '#9ca3af', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>CNIC Card</span>
-                <strong>{profile?.cnic || 'Not Specified'}</strong>
+          ) : (
+            <form onSubmit={handlePasswordChange} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Current Password</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Enter current password"
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  required
+                  disabled={passwordSubmitting}
+                />
               </div>
-            </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-              <Phone size={16} style={{ color: 'var(--primary)' }} />
-              <div>
-                <span style={{ color: '#9ca3af', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Mobile Phone</span>
-                <strong>{profile?.phone || 'Not Specified'}</strong>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">New Password</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Enter new password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  disabled={passwordSubmitting}
+                />
               </div>
-            </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-              <Calendar size={16} style={{ color: 'var(--primary)' }} />
-              <div>
-                <span style={{ color: '#9ca3af', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Birth Date / Gender</span>
-                <strong>{profile?.birthDate || 'N/A'} • {profile?.gender || 'Male'}</strong>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary" 
+                  style={{ flex: '1' }} 
+                  disabled={passwordSubmitting}
+                >
+                  {passwordSubmitting ? 'Updating...' : 'Update Password'}
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => {
+                    setShowPasswordForm(false);
+                    setOldPassword('');
+                    setNewPassword('');
+                  }} 
+                  style={{ flex: '0.5' }}
+                  disabled={passwordSubmitting}
+                >
+                  Cancel
+                </button>
               </div>
-            </div>
+            </form>
+          )}
+        </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <MapPin size={16} style={{ color: 'var(--primary)' }} />
-              <div>
-                <span style={{ color: '#9ca3af', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Location Profile</span>
-                <strong>{profile?.address ? `${profile.address}, ` : ''}{profile?.city || 'No City'}{profile?.state ? `, ${profile.state}` : ''}</strong>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Account Settings Card */}
-      <div className="card" style={{ padding: '16px', marginBottom: '0' }}>
-        <h3 className="section-title">
-          <span>Security Options</span>
-        </h3>
-
-        {!showPasswordDrawer ? (
-          <button 
-            type="button" 
-            className="btn btn-secondary" 
-            onClick={() => setShowPasswordDrawer(true)}
-            style={{ display: 'flex', gap: '8px', padding: '10px 14px', fontSize: '13px' }}
-          >
-            <Lock size={14} /> Change Account Password
-          </button>
-        ) : (
-          <form onSubmit={handlePasswordChange} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div className="input-group" style={{ marginBottom: '0' }}>
-              <label className="input-label">Current Password</label>
-              <input
-                type="password"
-                className="form-control no-icon"
-                placeholder="Enter current password"
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-                required
-                disabled={passwordSubmitting}
-              />
-            </div>
-
-            <div className="input-group" style={{ marginBottom: '4px' }}>
-              <label className="input-label">New Password</label>
-              <input
-                type="password"
-                className="form-control no-icon"
-                placeholder="Enter new password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                disabled={passwordSubmitting}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button 
-                type="submit" 
-                className="btn btn-primary" 
-                style={{ flex: '1', padding: '10px 14px', fontSize: '13px' }} 
-                disabled={passwordSubmitting}
-              >
-                {passwordSubmitting ? 'Updating...' : 'Update Password'}
-              </button>
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                onClick={() => {
-                  setShowPasswordDrawer(false);
-                  setOldPassword('');
-                  setNewPassword('');
-                }} 
-                style={{ flex: '0.6', padding: '10px 14px', fontSize: '13px' }}
-                disabled={passwordSubmitting}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
       </div>
 
     </div>

@@ -42,18 +42,14 @@ function Login({ onLogin, showToast }) {
   };
 
   return (
-    <div className="login-screen">
+    <div className="login-card">
       <div className="login-brand">
-        <div className="login-logo">AAM</div>
+        <div className="login-logo">A</div>
         <h2>AAM POWER</h2>
-        <p>Field Sampling Management Portal</p>
+        <p>Field Mechanics Management Portal</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="card" style={{ padding: '24px', background: 'rgba(22, 24, 38, 0.85)' }}>
-        <h3 style={{ fontFamily: 'Outfit', fontSize: '18px', fontWeight: '700', marginBottom: '20px', textAlign: 'center' }}>
-          Sign In
-        </h3>
-
+      <form onSubmit={handleSubmit}>
         {errorMsg && (
           <div style={{
             background: 'rgba(239, 68, 68, 0.1)',
@@ -79,7 +75,7 @@ function Login({ onLogin, showToast }) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="form-control"
-              placeholder="Enter your username"
+              placeholder="Enter username"
               disabled={submitting}
               autoComplete="username"
             />
@@ -106,6 +102,7 @@ function Login({ onLogin, showToast }) {
           type="submit"
           className="btn btn-primary"
           disabled={submitting}
+          style={{ width: '100%' }}
         >
           {submitting ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -127,8 +124,8 @@ function Login({ onLogin, showToast }) {
           )}
         </button>
 
-        <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '11px', color: '#6b7280' }}>
-          Authorized access only. Use pre-configured backend credentials (e.g., admin / password123).
+        <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '11px', color: '#6b7280' }}>
+          Authorized access only. Use pre-configured backend credentials (e.g. admin / 123).
         </div>
       </form>
     </div>

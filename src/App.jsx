@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import SamplingList from './components/SamplingList';
-import AddSampling from './components/AddSampling';
 import Profile from './components/Profile';
-import { LogOut } from 'lucide-react';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('aam_token') || '');
@@ -74,30 +72,20 @@ function App() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-        <div style={{
-          width: '40px',
-          height: '40px',
-          borderRadius: '50%',
-          border: '3px solid rgba(255, 82, 82, 0.1)',
-          borderTopColor: '#ff5252',
-          animation: 'spin 1s linear infinite'
-        }}></div>
-        <p style={{ color: '#9ca3af', fontSize: '14px', fontFamily: 'Outfit' }}>Loading session...</p>
-        <style>{`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p style={{ color: '#9ca3af', fontSize: '14px', marginTop: '16px', fontFamily: 'Outfit' }}>Loading session...</p>
       </div>
     );
   }
 
-  // Not logged in -> Show Login view (rendered inside root but without app bars)
+  // Not logged in -> Show Login view
   if (!token || !user) {
     return (
-      <div className="mobile-container">
+      <div className="login-page-container">
+        <div className="login-bg-mesh"></div>
+        <div className="login-glow-orb orb-1"></div>
+        <div className="login-glow-orb orb-2"></div>
         {toast && (
           <div className={`alert-toast ${toast.type}`}>
             {toast.message}
@@ -115,8 +103,6 @@ function App() {
         return <Dashboard token={token} onNavigate={setActiveTab} showToast={showToast} />;
       case 'samplings':
         return <SamplingList token={token} showToast={showToast} />;
-      case 'add':
-        return <AddSampling token={token} onNavigate={setActiveTab} showToast={showToast} />;
       case 'profile':
         return <Profile token={token} onLogout={handleLogout} onUserUpdate={(updatedName) => setUser(prev => ({ ...prev, name: updatedName }))} showToast={showToast} />;
       default:
@@ -128,38 +114,31 @@ function App() {
   const tabs = [
     {
       id: 'dashboard',
-      label: 'Home',
+      label: 'Dashboard',
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
+          <rect x="3" y="3" width="7" height="9" />
+          <rect x="14" y="3" width="7" height="5" />
+          <rect x="14" y="12" width="7" height="9" />
+          <rect x="3" y="16" width="7" height="5" />
         </svg>
       )
     },
     {
       id: 'samplings',
-      label: 'Samplings',
+      label: 'Mechanics',
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
-          <path d="m9 12 2 2 4-4" />
-        </svg>
-      )
-    },
-    {
-      id: 'add',
-      label: 'Add New',
-      isFab: true,
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
         </svg>
       )
     },
     {
       id: 'profile',
-      label: 'Profile',
+      label: 'Admin Profile',
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -170,7 +149,7 @@ function App() {
   ];
 
   return (
-    <div className="mobile-container">
+    <div className="web-layout">
       {/* Toast Alert */}
       {toast && (
         <div className={`alert-toast ${toast.type}`}>
@@ -178,51 +157,76 @@ function App() {
         </div>
       )}
 
-      {/* Screen Header */}
-      <header className="mobile-header">
-        <h1>AAM POWER</h1>
-        <div className="mobile-header-actions">
-          <span style={{ fontSize: '12px', color: '#9ca3af', fontWeight: '500' }}>
-            Hi, {user.name.split(' ')[0]}
-          </span>
-          <button className="icon-btn" onClick={handleLogout} title="Log Out">
-            <LogOut size={16} />
-          </button>
+      {/* Sidebar Navigation */}
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <div className="sidebar-logo">A</div>
+          <span className="sidebar-title">AAM POWER</span>
         </div>
-      </header>
-
-      {/* Screen Content View */}
-      <main className="view-content">
-        {renderView()}
-      </main>
-
-      {/* Mobile Tab Navigation */}
-      <nav className="bottom-nav">
-        {tabs.map((tab) => {
-          if (tab.isFab) {
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`nav-item fab-item ${activeTab === tab.id ? 'active' : ''}`}
-                title={tab.label}
-              >
-                {tab.icon}
-              </button>
-            );
-          }
-          return (
+        
+        <nav className="sidebar-nav">
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
+              className={`sidebar-link ${activeTab === tab.id ? 'active' : ''}`}
             >
               {tab.icon}
               <span>{tab.label}</span>
             </button>
-          );
-        })}
-      </nav>
+          ))}
+        </nav>
+
+        <div className="sidebar-footer">
+          <button className="sidebar-link" onClick={handleLogout} style={{ width: '100%', color: '#ef4444', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '14px' }}>
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Viewport */}
+      <div className="main-viewport">
+        {/* Top Header */}
+        <header className="top-header">
+          <div className="page-title-area">
+            <h1>{tabs.find(t => t.id === activeTab)?.label || 'AAM POWER'}</h1>
+          </div>
+          <div className="top-header-actions">
+            <div className="user-profile-badge">
+              {user.profileImage ? (
+                <img 
+                  src={user.profileImage.startsWith('http') || user.profileImage.startsWith('/uploads') || user.profileImage.startsWith('/tmp') ? user.profileImage : '/api' + user.profileImage.replace('file://', '')} 
+                  alt="avatar" 
+                  className="user-avatar-mini" 
+                  onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80' }}
+                />
+              ) : (
+                <div className="user-avatar-mini" style={{ background: '#00d2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', color: 'white' }}>
+                  {user.name ? user.name[0] : 'A'}
+                </div>
+              )}
+              <span className="user-name-mini">{user.name || 'Admin'}</span>
+            </div>
+            <button className="logout-btn-header" onClick={handleLogout} title="Sign Out">
+              <svg style={{ width: '18px', height: '18px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        {/* View Content Wrapper */}
+        <main className="content-wrapper">
+          {renderView()}
+        </main>
+      </div>
     </div>
   );
 }
