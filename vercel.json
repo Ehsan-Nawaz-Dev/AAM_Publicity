@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "http://aampower.com/api/:path*" },
+    { "source": "/uploads/:path*", "destination": "http://aampower.com/uploads/:path*" }
+  ]
+}
