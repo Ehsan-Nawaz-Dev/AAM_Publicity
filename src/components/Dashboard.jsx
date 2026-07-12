@@ -59,7 +59,7 @@ function Dashboard({ token, onNavigate, showToast }) {
           width: '32px',
           height: '32px',
           border: '2.5px solid rgba(255, 82, 82, 0.1)',
-          borderTopColor: '#ff5252',
+          borderTopColor: '#00d2ff',
           borderRadius: '50%',
           animation: 'spin 0.8s linear infinite'
         }}></div>
@@ -122,8 +122,8 @@ function Dashboard({ token, onNavigate, showToast }) {
       {
         label: 'Distributions',
         data: barDataValues.length > 0 ? barDataValues : [0],
-        backgroundColor: 'rgba(255, 82, 82, 0.85)',
-        hoverBackgroundColor: '#ff5252',
+        backgroundColor: 'rgba(0, 210, 255, 0.85)',
+        hoverBackgroundColor: '#00d2ff',
         borderRadius: 6,
         borderWidth: 0,
       },
