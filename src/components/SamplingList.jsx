@@ -88,7 +88,7 @@ function SamplingList({ token, showToast }) {
   const [view, setView] = useState('grid');
 
   const [selected, setSelected] = useState(null);
-  const [lightbox, setLightbox] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(-1);
 
   // Debounce typing so a 1,300-record collection isn't queried on every keystroke.
   useEffect(() => {
@@ -137,16 +137,23 @@ function SamplingList({ token, showToast }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Close the modal / lightbox on Escape.
+  // Close the modal / lightbox on Escape, or navigate with Arrow keys.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key !== 'Escape') return;
-      if (lightbox) setLightbox(null);
-      else if (selected) setSelected(null);
+      if (e.key === 'Escape') {
+        if (lightboxIndex !== -1) setLightboxIndex(-1);
+        else if (selected) setSelected(null);
+      } else if (lightboxIndex !== -1 && selected && selected.images) {
+        if (e.key === 'ArrowLeft' && lightboxIndex > 0) {
+          setLightboxIndex(p => p - 1);
+        } else if (e.key === 'ArrowRight' && lightboxIndex < selected.images.length - 1) {
+          setLightboxIndex(p => p + 1);
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [lightbox, selected]);
+  }, [lightboxIndex, selected]);
 
   const clearFilters = () => {
     setSearchInput('');
@@ -417,7 +424,7 @@ function SamplingList({ token, showToast }) {
                 item={selected}
                 imgClass="detail-hero-photo"
                 fallbackClass="detail-hero-fallback"
-                onClick={() => selected.images?.[0] && setLightbox(selected.images[0])}
+                onClick={() => selected.images?.[0] && setLightboxIndex(0)}
               />
 
               <div className="detail-hero-info">
@@ -538,7 +545,7 @@ function SamplingList({ token, showToast }) {
                         alt={`Attachment ${i + 1}`}
                         className="photo-thumb"
                         loading="lazy"
-                        onClick={() => setLightbox(img)}
+                        onClick={() => setLightboxIndex(i)}
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       />
                     ))}
@@ -559,9 +566,27 @@ function SamplingList({ token, showToast }) {
         </div>
       )}
 
-      {lightbox && (
-        <div className="lightbox" onClick={() => setLightbox(null)}>
-          <img src={lightbox} alt="Attachment full size" onClick={(e) => e.stopPropagation()} />
+      {lightboxIndex !== -1 && selected && selected.images && selected.images[lightboxIndex] && (
+        <div className="lightbox" onClick={() => setLightboxIndex(-1)}>
+          <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+            <button className="lightbox-close" onClick={() => setLightboxIndex(-1)} aria-label="Close lightbox">
+              <X size={20} />
+            </button>
+            {lightboxIndex > 0 && (
+              <button className="lightbox-btn prev" onClick={() => setLightboxIndex(p => p - 1)} aria-label="Previous image">
+                <ChevronLeft size={24} />
+              </button>
+            )}
+            <img src={selected.images[lightboxIndex]} alt={`Attachment ${lightboxIndex + 1}`} className="lightbox-image" />
+            {lightboxIndex < selected.images.length - 1 && (
+              <button className="lightbox-btn next" onClick={() => setLightboxIndex(p => p + 1)} aria-label="Next image">
+                <ChevronRight size={24} />
+              </button>
+            )}
+            <div className="lightbox-indicator">
+              {lightboxIndex + 1} / {selected.images.length}
+            </div>
+          </div>
         </div>
       )}
     </div>
