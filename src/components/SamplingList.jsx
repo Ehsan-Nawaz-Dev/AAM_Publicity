@@ -497,11 +497,21 @@ function SamplingList({ token, showToast }) {
 
               {selected.location && (selected.location.lat || selected.location.lon) && (
                 <section>
-                  <div className="detail-section-title"><Compass size={12} /> GPS coordinates</div>
-                  <div className="coord-row">
-                    <span className="coord-val">
-                      <Compass size={14} style={{ color: 'var(--primary)' }} />
-                      {selected.location.lat?.toFixed(5)}, {selected.location.lon?.toFixed(5)}
+                  <div className="detail-section-title"><MapPin size={12} /> Location</div>
+                  <div style={{ marginTop: '10px', width: '100%' }}>
+                    <iframe
+                      title="Mechanic Location Map"
+                      width="100%"
+                      height="240"
+                      style={{ border: 0, borderRadius: '14px', background: 'rgba(255,255,255,0.03)' }}
+                      src={`https://maps.google.com/maps?q=${selected.location.lat},${selected.location.lon}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                      allowFullScreen
+                      loading="lazy"
+                    ></iframe>
+                  </div>
+                  <div className="coord-row" style={{ marginTop: '12px' }}>
+                    <span className="coord-val" style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      GPS: {selected.location.lat?.toFixed(5)}, {selected.location.lon?.toFixed(5)}
                     </span>
                     <a
                       className="btn btn-secondary btn-sm"
